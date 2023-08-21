@@ -1,0 +1,5 @@
+.kluster
+*.sw[pq]
+/local
+/gen
+/.idea

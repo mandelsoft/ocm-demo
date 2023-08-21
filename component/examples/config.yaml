@@ -1,0 +1,12 @@
+namespace: myechoserver
+config:
+  color: "#000000"             # text color
+  title: "Request Information" # page title
+ingress:
+  enabled: false
+  enableGardenDNS: false
+  hosts:
+    - host: <your hostname>
+      paths:
+        - path: /
+          pathType: Prefix
