@@ -5,16 +5,26 @@ This project provides a simple web application, an appropriate helm chart and an
 The default OCM repository dor the component is
 `ghcr.io/mandelsoft/ocm`.
 
-The component name is `mandelsoft.org/demo/helmdemo`, version `1.0.0`
+The component name is `mandelsoft.org/demo/helmdemo`, floating version `1.0.0-dev`
 
 ## Preconditions
 
 A precondition is an installed OCM CLI and the *docker* service.
 
+your local environment can be configured via environment variables:
+
+```bash
+export PROVIDER= <your intended provider name, default mandelsoft.org>
+export GITHUBORG=<your-org if you are using GitHub as pacakge repository, default mandelsoft>
+export OCMREPO=<your ocm repository to publish the component (<your-oci-repo>/<path-to-ocm-repo>), default ghcr.io/$(GITHUBORG)/ocm>
+```
+
+the variable `TARGETREPO` is used for various purposes, it should not be set in the environment.
+
 ## Operations
 
 All operations are covered by the `Makefile` provided by the project.
-It also shows the approriate OCM commands.
+It also shows the appropriate OCM commands.
 
 ### Building
 
@@ -63,18 +73,15 @@ If you want to use another OCM repository use
 OCMREPO=<your-oci-repo>/<path-to-ocm-repo> make push
 ```
 
-for further usage you can put those settings into your environment:
-
-```bash
-export OCMREPO=...
-export GITHUBORG=...
-```
 To examine the result in an OCM repository use
 
 ```bash
 TARGETREPO=<your-oci-repo>/<path-to-ocm-repo> make describe
 TARGETREPO=<your-oci-repo>/<path-to-ocm-repo> make descriptor
 ```
+
+**Note:** If you want to set the `TARGETREPO` to your `OCMREPO` just set
+`TARGETREPO=repo`.)
 
 In this OCM repository you will also see, that the image resource now has
 an additional global access and you wll find the image directly under
@@ -97,7 +104,7 @@ If you do not specify your local OCM repository the standard local/dev repositor
 
 Finally, you can deploy the application into a kubernetes cluster using the provided installation package.
 
-To do so, you need some configuration. To help you composing the required configuration files, the provided package offeres some templates, which can be downloaded with
+To do so, you need some configuration. To help you composing the required configuration files, the provided package offers some templates, which can be downloaded with
 
 ```bash
 TARGETREPO=... make toi-config
@@ -109,8 +116,104 @@ It creates a folder `local/toi`with two configuration files:
 
 Fill in the requested configuration parameters and the path to your cluster kubeconfig. The kubeconfig must be self-contained, because it is used inside an installation container.
 
+**TOIParameters:**
+```yaml
+namespace: myechoserver
+config:
+  color: "#ff0000"             # text color
+  title: "Request Information" # page title
+ingress:
+  enabled: true
+  enableGardenDNS: true
+  hosts:
+    - host: mechoserver.<ingress-domain>
+      paths:
+        - path: /
+          pathType: Prefix
+```
+
+**TOICredentials:**
+```yaml
+credentials:
+  target:
+    credentials:
+      KUBECONFIG: (( read("~/k8s/CLUSTERS/ocmdemo") ))
+```
+
+If you use a garden cluster, you can enable DNS support from Gardener, you just
+have to enter the ingress domain of your cluster.
+
 ```bash
 TARGETREPO=... make toi-install
 ```
 
 If you omit the `TARGETREPO` your default push location is used (specifying `OCMREPO` or `GITHUBORG`). Please be aware, that it is not possible to deploy directly from the CTF file, because an image in an OCI registry is required.
+
+### Routing Slips
+
+The component version used as delivery unit may have any number of routing slips.
+A routing slip belongs to a dedicated provider and has an appropriate name, for
+example `mandelsoft.org`. This provider owns a private key and publishes a public key.
+With these keys the provider may add any process step information to the routing slip,
+and a consumer can verify these entries. This can even be done after the component version
+has been signed.
+
+The transport system supports republishing an already existent component version with
+modified non-signature relevant label entries or additional signatures. The routing slips are implemented on the
+basis of such labels, therefore, they can incrementally be transported to a consumer
+(or re-published by the provider and re-imported by the consumer).
+
+With the command
+
+```bash
+[PROVIDER=...] ]make rs-keys
+```
+
+a key pair is generated under `local/keys` with the name of your intended provider.
+Afterwards, it is possible to add entries for the routing slip of the provider using
+
+```bash
+[PROVIDER=...] COMMENT=<your commant to add> make rs-add
+```
+
+By default, the CTF file is modified. The makefile uses a standard entry type (`comment`)
+here, but basically any other custom type is possible.
+
+To examine your routing slip you can use 
+
+```bash
+make rs
+```
+
+After extending your routing slip you can re-publish your CTF
+again with the commands show above, for example
+
+```bash
+OCMREPO=<your-oci-repo>/<path-to-ocm-repo> make push
+```
+
+If you want to apply the command to the component version in a repository, instead, just precede
+the above commands with your `TARGETREPO` setting
+
+```bash
+[TARGETREPO=...] [PROVIDER=...] COMMENT=<your commant to add> make rs-add
+[TARGETREPO=...] make rs
+```
+
+Now your consumer may import the re-published version again with
+the transfer commands from above:
+
+```bash
+[OCMREPO=....] TARGETREPO=<your-oci-target-repo>/<path-to-ocm-repo> make transport
+```
+
+### Resetting your version
+
+If you want to overwrite your published version with the content
+of your CTF, for example to reset your routing slip, you can
+just use
+
+```bash
+make force-push
+```
+

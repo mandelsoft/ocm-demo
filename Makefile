@@ -5,11 +5,12 @@ COMPONENT    = $(PROVIDER)/demo/$(NAME)
 OCMREPO     ?= ghcr.io/$(GITHUBORG)/ocm
 LOOKUP      ?= ghcr.io/open-component-model/ocm
 IMAGE        = echoserver
+COMMENT     ?= default comment
 
 MULTI       ?= true
 PLATFORMS   ?= linux/amd64 linux/arm64
 HELMINSTCOMP = ocm.software/toi/installers/helminstaller
-HELMINSTVERS = 0.3.0
+HELMINSTVERS = 0.4.0-dev
 
 REPO_ROOT                                     := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSION                                        = $(shell cat VERSION)
@@ -32,6 +33,11 @@ ifeq ($(MULTI),true)
 FLAGSUF     = .multi
 endif
 
+
+ifeq ($(TARGETREPO),repo)
+TARGETREPO   = $(OCMREPO)
+endif
+
 ifneq ($(TARGETREPO),)
 DEPLOYSOURCE = $(TARGETREPO)
 else
@@ -46,6 +52,7 @@ GEN := $(REPO_ROOT)/gen
 CHARTSRCS=$(shell find $(REPO_ROOT)/echoserver/helmchart -type f)
 CMDSRCS=$(shell find $(REPO_ROOT)/echoserver/cmd -type f)
 COMPSRCS=$(shell find $(REPO_ROOT)/component -type f)
+CTFFILES=$(GEN)/ctf $(shell test \! -e $(GEN)/ctf || find $(GEN)/ctf -type f)
 
 
 .PHONY: build
@@ -91,12 +98,17 @@ eval-component:
 .PHONY: push
 push: $(GEN)/ctf $(GEN)/push.$(NAME)
 
-$(GEN)/push.$(NAME): $(GEN)/ctf
-	$(OCM) -X keeplocalblob=true transfer ctf --lookup $(LOOKUP) -f $(GEN)/ctf $(OCMREPO)
+$(GEN)/push.$(NAME): $(CTFFILES)
+	$(OCM) -X keeplocalblob=true transfer ctf --lookup $(LOOKUP) $(OPTIONS) $(GEN)/ctf $(OCMREPO)
 	@touch $(GEN)/push.$(NAME)
 
 .PHONY: plain-push
 plain-push: $(GEN)
+	$(OCM) -X keeplocalblob=true transfer ctf --lookup $(LOOKUP) $(OPTIONS) $(GEN)/ctf $(OCMREPO)
+	@touch $(GEN)/push.$(NAME)
+
+.PHONY: force-push
+force-push: $(GEN)
 	$(OCM) -X keeplocalblob=true transfer ctf --lookup $(LOOKUP) -f $(GEN)/ctf $(OCMREPO)
 	@touch $(GEN)/push.$(NAME)
 
@@ -139,6 +151,9 @@ endif
 clean:
 	rm -rf $(GEN)
 
+################################################################################
+# TOI
+
 .PHONY: toi-testenv
 toi-testenv: $(GEN)/.exists $(GEN)/push.$(NAME)
 	@mkdir -p $(GEN)/test
@@ -152,9 +167,34 @@ toi-config:
 .PHONY: toi-install
 toi-install:
 	@mkdir -p local/toi
-	cd local/toi; ocm bootstrap package install $(DEPLOYSOURCE)//$(COMPONENT):$(VERSION)
+	cd local/toi; ocm bootstrap package --lookup $(LOOKUP) install $(DEPLOYSOURCE)//$(COMPONENT):$(VERSION)
 
 .PHONY: toi-uninstall
 toi-uninstall:
 	@mkdir -p local/toi
-	cd local/toi; ocm bootstrap package uninstall $(DEPLOYSOURCE)//$(COMPONENT):$(VERSION)
+	cd local/toi; ocm bootstrap package --lookup $(LOOKUP) uninstall $(DEPLOYSOURCE)//$(COMPONENT):$(VERSION)
+
+################################################################################
+# Routing slips
+
+.PHONY: rs-keys
+rs-keys: local/keys/$(PROVIDER)
+
+local/keys/$(PROVIDER):
+	cd local/keys; ocm create rsakeypair $(PROVIDER)
+
+.PHONY: rs
+rs:
+ifneq ($(TARGETREPO),)
+	ocm -k $(PROVIDER)=@local/keys/$(PROVIDER) get routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) -v
+else
+	ocm -k $(PROVIDER)=@local/keys/$(PROVIDER) get routingslip $(GEN)/ctf -v
+endif
+
+.PHONY: rs-add
+rs-add:
+ifneq ($(TARGETREPO),)
+	ocm -K $(PROVIDER)=@local/keys/$(PROVIDER) add routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) $(PROVIDER) comment --comment "$(COMMENT)"
+else
+	ocm -K $(PROVIDER)=@local/keys/$(PROVIDER) add routingslip $(GEN)/ctf $(PROVIDER) comment --comment "$(COMMENT)"
+endif
