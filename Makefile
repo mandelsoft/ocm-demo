@@ -40,6 +40,12 @@ TARGETREPO   = $(OCMREPO)
 endif
 
 ifneq ($(TARGETREPO),)
+TARGET=$(TARGETREPO)//$(COMPONENT):$(VERSION)
+else
+TARGET=$(GEN)/ctf
+endif
+
+ifneq ($(TARGETREPO),)
 DEPLOYSOURCE = $(TARGETREPO)
 else
 DEPLOYSOURCE = $(OCMREPO)
@@ -139,24 +145,28 @@ info:
 
 .PHONY: describe
 describe: $(GEN)/ctf
-ifneq ($(TARGETREPO),)
-	$(OCM) get resources --lookup $(LOOKUP) -r -o treewide $(TARGETREPO)//$(COMPONENT):$(VERSION)
-else
-	$(OCM) get resources --lookup $(LOOKUP) -r -o treewide $(GEN)/ctf
-endif
+	$(OCM) get resources --lookup $(LOOKUP) -r -o treewide $(TARGET)
 
 .PHONY: descriptor
 descriptor: $(GEN)/ctf
-ifneq ($(TARGETREPO),)
-	$(OCM) get component -S v3alpha1 -o yaml $(TARGETREPO)//$(COMPONENT):$(VERSION)
-else
-	$(OCM) get component -S v3alpha1 -o yaml $(GEN)/ctf
-endif
+	$(OCM) get component -S v3alpha1 $(OPTION) --lookup $(LOOKUP) -o yaml $(TARGET)
 
 
 .PHONY: clean
 clean:
 	rm -rf $(GEN)
+
+################################################################################
+# signing
+
+sign:
+	$(OCM) sign component -K local/keys/$(PROVIDER) --lookup $(LOOKUP) -s $(PROVIDER) $(TARGET)
+
+verify:
+	$(OCM) verify component -K local/keys/$(PROVIDER) --lookup $(LOOKUP) -s $(PROVIDER) $(TARGET)
+
+verify-orig:
+	$(OCM) verify component -K keys/mandelsoft.org.pub --lookup $(LOOKUP) -s $(PROVIDER) $(TARGET)
 
 ################################################################################
 # TOI
@@ -200,16 +210,8 @@ endif
 
 .PHONY: rs
 rs:
-ifneq ($(TARGETREPO),)
-	ocm -k $(PROVIDER)=@$(KEYPAIR).pub get routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) -v
-else
-	ocm -k $(PROVIDER)=@$(KEYPAIR).pub get routingslip $(GEN)/ctf -v
-endif
+	ocm -k $(PROVIDER)=@$(KEYPAIR).pub get routingslip $(TARGET) -v
 
 .PHONY: rs-add
 rs-add:
-ifneq ($(TARGETREPO),)
-	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) $(PROVIDER) comment --comment "$(COMMENT)"
-else
-	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(GEN)/ctf $(PROVIDER) comment --comment "$(COMMENT)"
-endif
+	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(TARGET) $(PROVIDER) comment --comment "$(COMMENT)"

@@ -11,7 +11,33 @@ The component name is `mandelsoft.org/demo/helmdemo`, floating version `1.0.0-de
 
 A precondition is an installed OCM CLI and the *docker* service.
 
-your local environment can be configured via environment variables:
+**ATTENTION:** As long as the required features are still under development you
+should use the branch `routingslip` in [`github.com/mandelsoft/ocm`](https://github.com/mandelsoft/ocm).
+Fetch this branch and call `make install`, which will install 
+the OCM CLI in the bin folder of your Go workspace.
+
+If you want to work with OCM repositories, you should create
+an `.ocmconfig` file in your HOME directory:
+
+**~/.ocmconfig:** 
+```yaml
+type: generic.config.ocm.software/v1
+configurations:
+  - type: credentials.config.ocm.software
+    repositories:
+    - repository:
+        type: DockerConfig/v1
+        dockerConfigFile: "~/.docker/config.json"
+        propagateConsumerIdentity: true
+```
+
+It tells the OCM CLI to reuse your docker configuration
+to read the credentials required to access OCI registry based
+OCM repositories. Please set the correct location of your docker
+config file.
+
+Your local environment for using the Makefile can be configured
+via environment variables:
 
 ```bash
 export PROVIDER= <your intended provider name, default mandelsoft.org>
@@ -19,12 +45,26 @@ export GITHUBORG=<your-org if you are using GitHub as pacakge repository, defaul
 export OCMREPO=<your ocm repository to publish the component (<your-oci-repo>/<path-to-ocm-repo>), default ghcr.io/$(GITHUBORG)/ocm>
 ```
 
-the variable `TARGETREPO` is used for various purposes, it should not be set in the environment.
+Additionally, the variable `TARGETREPO` is used for various purposes, it should not be set in the environment.
 
 ## Operations
 
 All operations are covered by the `Makefile` provided by the project.
-It also shows the appropriate OCM commands.
+This demo will execute make targets for the command executions
+to offer as short as possible command lines.
+
+The Makefile provides a complete project setup for building the
+content and all live-cycle operations for the provided component
+version.
+
+The used OCM commands executed behind the scenes are shown in
+the output. Feel free to copy them and play with the arguments
+to execute different flavors.
+
+All temporary generated data will be generated in the `gen`
+folder of the project. Additionally, the folder `local` is used
+to generate non-volatile data like keys or installation
+configurations. These folders are excluded by `.gitignore`
 
 ### Building
 
@@ -43,13 +83,13 @@ make ctf
 The CTF contains all the required resources, including a multi-platform
 image for your application.
 
-Afterwards you can have a look into the content of the generated component version with
+Afterwards, you can have a look into the content of the generated component version with
 
 ```bash
 make describe
 ```
 
-or
+to examine the component version's resource structure, or
 
 ```bash
 make descriptor
@@ -167,7 +207,7 @@ For preparation, you need a key pair for signing. With the
 command 
 
 ```bash
-[PROVIDER=...] ]make keys
+[PROVIDER=...] make keys
 ```
 
 a key pair is generated under `local/keys` with the name of your intended provider.
@@ -208,6 +248,52 @@ the transfer commands from above:
 ```bash
 [OCMREPO=....] TARGETREPO=<your-oci-target-repo>/<path-to-ocm-repo> make transport
 ```
+
+### Signing
+
+To sign your component, you need a keeypair for your organization. The same keys already used for the routing slip can be used:
+
+```bash
+[PROVIDER=...] make keys
+```
+
+Now you are read for signing. A component version may carry an
+arbitrary number of signatures. Therefore, every signature has
+a name, typically the name of the providing organization or any other identity, for example a mail address.
+
+The provided Makefile uses the provider. Som to sign your component just call:
+
+```bash
+[PROVIDER=...] make sign
+```
+
+It signs your local CTF, to sign directly in a repository just
+precede your call with your desired TARGETREPO:
+
+```bash
+TARGETREPO=... [PROVIDER=...] make sign
+```
+
+Similarily it ispossible to verify a signature with
+
+```bash
+[TARGETREPO=...] [PROVIDER=...] make verify
+```
+
+To verify the original version of this demo provided in
+the OCM repository `ghcr.io/mandelsoft/ocm`, the following command can be used:
+
+```bash
+make keys verify-orig
+```
+
+It uses the public key coming with this git repository content.
+
+The signature covers only signature-relevant data fields. The
+routing slip is implemented as volatile label, and can be added
+or extended after a component version has been signed.
+
+This can be demonstrated, by adding [routing slip](#routing-slips) enties after signing the component. Afterwards, the signature(s) can stll successfully be verified.
 
 ### Resetting your version
 
