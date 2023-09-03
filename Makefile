@@ -5,6 +5,7 @@ COMPONENT    = $(PROVIDER)/demo/$(NAME)
 OCMREPO     ?= ghcr.io/$(GITHUBORG)/ocm
 LOOKUP      ?= ghcr.io/open-component-model/ocm
 IMAGE        = echoserver
+KEYPAIR     ?= local/keys/$(PROVIDER)
 COMMENT     ?= default comment
 
 MULTI       ?= true
@@ -54,6 +55,8 @@ CMDSRCS=$(shell find $(REPO_ROOT)/echoserver/cmd -type f)
 COMPSRCS=$(shell find $(REPO_ROOT)/component -type f)
 CTFFILES=$(GEN)/ctf $(shell test \! -e $(GEN)/ctf || find $(GEN)/ctf -type f)
 
+LOCALKEY = $(wildcard keys/$(PROVIDER))
+ENCRYPT  = $(wildcard ~/.ocm/keys/$(PROVIDER).ekey)
 
 .PHONY: build
 build: $(GEN)/image.$(NAME)$(FLAGSUF)
@@ -124,11 +127,15 @@ $(GEN)/.exists:
 
 .PHONY: info
 info:
-	@echo "ROOT:     $(REPO_ROOT)"
-	@echo "VERSION:  $(VERSION)"
-	@echo "COMMIT:   $(COMMIT)"
-	@echo "CREDS:    $(CREDS)"
+	@echo "ROOT:      $(REPO_ROOT)"
+	@echo "VERSION:   $(VERSION)"
+	@echo "COMMIT:    $(COMMIT)"
+	@echo "CREDS:     $(CREDS)"
+	@echo "PROVIDER:  $(PROVIDER)"
 	@echo "version for helminstaller:  $(HELMINSTVERSION)"
+	@echo "local key: $(LOCALKEY)"
+	@echo "encrypt:   $(ENCRYPT)"
+
 
 .PHONY: describe
 describe: $(GEN)/ctf
@@ -175,26 +182,34 @@ toi-uninstall:
 	cd local/toi; ocm bootstrap package --lookup $(LOOKUP) uninstall $(DEPLOYSOURCE)//$(COMPONENT):$(VERSION)
 
 ################################################################################
-# Routing slips
+# Keys
 
-.PHONY: rs-keys
-rs-keys: local/keys/$(PROVIDER)
+.PHONY: keys
+keys: local/keys/$(PROVIDER)
 
 local/keys/$(PROVIDER):
+	@mkdir -p local/keys
+ifneq ($(and $(LOCALKEY), $(ENCRYPT)),)
+	cp keys/mandelsoft.org* local/keys
+else
 	cd local/keys; ocm create rsakeypair $(PROVIDER)
+endif
+
+################################################################################
+# Routing slips
 
 .PHONY: rs
 rs:
 ifneq ($(TARGETREPO),)
-	ocm -k $(PROVIDER)=@local/keys/$(PROVIDER) get routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) -v
+	ocm -k $(PROVIDER)=@$(KEYPAIR).pub get routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) -v
 else
-	ocm -k $(PROVIDER)=@local/keys/$(PROVIDER) get routingslip $(GEN)/ctf -v
+	ocm -k $(PROVIDER)=@$(KEYPAIR).pub get routingslip $(GEN)/ctf -v
 endif
 
 .PHONY: rs-add
 rs-add:
 ifneq ($(TARGETREPO),)
-	ocm -K $(PROVIDER)=@local/keys/$(PROVIDER) add routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) $(PROVIDER) comment --comment "$(COMMENT)"
+	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(TARGETREPO)//$(COMPONENT):$(VERSION) $(PROVIDER) comment --comment "$(COMMENT)"
 else
-	ocm -K $(PROVIDER)=@local/keys/$(PROVIDER) add routingslip $(GEN)/ctf $(PROVIDER) comment --comment "$(COMMENT)"
+	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(GEN)/ctf $(PROVIDER) comment --comment "$(COMMENT)"
 endif

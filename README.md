@@ -163,13 +163,15 @@ modified non-signature relevant label entries or additional signatures. The rout
 basis of such labels, therefore, they can incrementally be transported to a consumer
 (or re-published by the provider and re-imported by the consumer).
 
-With the command
+For preparation, you need a key pair for signing. With the 
+command 
 
 ```bash
-[PROVIDER=...] ]make rs-keys
+[PROVIDER=...] ]make keys
 ```
 
 a key pair is generated under `local/keys` with the name of your intended provider.
+
 Afterwards, it is possible to add entries for the routing slip of the provider using
 
 ```bash
@@ -217,3 +219,24 @@ just use
 make force-push
 ```
 
+### Static config in `.ocmconfig`
+
+Static key definitions can easily be added to your
+ocm confiuration file `~/.ocmconfig`:
+
+```yaml
+type: generic.config.ocm.software/v1
+configurations:
+  - type: credentials.config.ocm.software
+    repositories:
+    - repository:
+        type: DockerConfig/v1
+        dockerConfigFile: "~/.docker/config.json"
+        propagateConsumerIdentity: true
+
+  - type: keys.config.ocm.software
+    privateKeys:
+      mandelsoft.org:
+        path: ~/.ocm/keys/mandelsoft.org
+
+```
