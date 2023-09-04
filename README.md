@@ -177,17 +177,29 @@ ingress:
 credentials:
   target:
     credentials:
-      KUBECONFIG: (( read("~/k8s/CLUSTERS/ocmdemo") ))
+      KUBECONFIG: (( read("~/k8s/CLUSTERS/ocmdemo","text") ))
 ```
 
 If you use a garden cluster, you can enable DNS support from Gardener, you just
-have to enter the ingress domain of your cluster.
+have to enter a flat sub-domain of the ingress domain of your
+cluster. If you require 
+a deeper DNS name, or a sub-somain of another domain configured
+for your cluster, you can additionally enable the garden DNS
+option.
 
 ```bash
 TARGETREPO=... make toi-install
 ```
 
 If you omit the `TARGETREPO` your default push location is used (specifying `OCMREPO` or `GITHUBORG`). Please be aware, that it is not possible to deploy directly from the CTF file, because an image in an OCI registry is required.
+
+With
+
+```bash
+TARGETREPO=... make toi-uninstall
+```
+
+you can remove the deployment, again.
 
 ### Routing Slips
 

@@ -1,4 +1,4 @@
 credentials:
   target:
     credentials:
-      KUBECONFIG: (( read("~/k8s/CLUSTERS/test") ))
+      KUBECONFIG: (( read("~/k8s/CLUSTERS/test","text") ))
