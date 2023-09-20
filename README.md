@@ -47,6 +47,98 @@ export OCMREPO=<your ocm repository to publish the component (<your-oci-repo>/<p
 
 Additionally, the variable `TARGETREPO` is used for various purposes, it should not be set in the environment.
 
+## [Optional] Setup Local Cluster
+
+This demo executes processes in containers that need to connect to the Kubernetes cluster. When demoing with a local cluster on your laptop, the network and DNS resolution must work transparently. This requires some adjustments (which are typically not needed for usual use cases).
+
+The following presumes that you are using Docker Desktop on your laptop. 
+
+Edit your `/etc/hosts` file and add the following lines:
+```bash
+127.0.0.1	kubernetes.docker.internal #needed for Docker managed Kubernetes
+127.0.0.1	gateway.docker.internal    #needed for Kind and Service access
+```
+
+Use `gateway.docker.internal` as ingress domain, and `curl -k https://gateway.docker.internal` to access the sample service from your laptop cli.
+
+### Kind
+
+First install [Kind](https://kind.sigs.k8s.io/docs/user/quick-start/#installation), and utilze the Makefile to bring up a Kind cluster:
+```bash
+make kind-up
+```
+Delete the Kind cluster with:
+```bash
+make kind-down
+```
+
+#### Manual Steps
+Create a `kind.yaml` file as follows:
+```yaml
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: kind
+networking:
+  apiServerPort: 6443
+  kubeProxyMode: "ipvs"
+nodes:
+- role: control-plane
+  kubeadmConfigPatches:
+  - |
+    kind: InitConfiguration
+    nodeRegistration:
+      kubeletExtraArgs:
+        node-labels: "ingress-ready=true"
+  - |
+    kind: ClusterConfiguration
+    apiServer:
+      certSANs:
+        - "gateway.docker.internal"
+        - "localhost"
+        - "127.0.0.1"
+  extraPortMappings:
+  - containerPort: 80
+    hostPort: 80
+    protocol: TCP
+  - containerPort: 443
+    hostPort: 443
+    protocol: TCP
+```
+Bring up a kind cluster with:
+```bash
+kind create cluster --config kind.yaml
+```
+Next, open the resulting kubeconfig file in `~/.kube/config` and adjust the attribute to `server: https://gateway.docker.internal:6443`:
+```yaml
+- cluster:
+    certificate-authority-data: <redacted>
+    server: https://gateway.docker.internal:6443
+  name: kind-kind
+```
+Install an ingress controller as described in [Kind/Ingress](https://kind.sigs.k8s.io/docs/user/ingress/), e.g.:
+```bash
+kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+```
+### Kubernetes by Docker Desktop
+Enable Kubernetes in Docker Desktop (this can only be done manually). When the cluster is ready, run:
+```bash
+make prep-k8s-docker
+```
+
+#### Manual Steps
+Open the resulting kubeconfig file in `~/.kube/config` and adjust the attribute to `server: https://kubernetes.docker.internal:6443`:
+```yaml
+- cluster:
+    certificate-authority-data: <redacted>
+    server: https://kubernetes.docker.internal:6443
+  name: kind-kind
+```
+Install an ingress controller as described in [NGINX Ingress](https://kubernetes.github.io/ingress-nginx/deploy/#quick-start), e.g.:
+```bash
+kubectl apply -f https://github.com/kubernetes/ingress-nginx/blob/main/deploy/static/provider/cloud/deploy.yaml
+```
+
+
 ## Operations
 
 All operations are covered by the `Makefile` provided by the project.
@@ -166,7 +258,7 @@ ingress:
   enabled: true
   enableGardenDNS: true
   hosts:
-    - host: mechoserver.<ingress-domain>
+    - host: *.<ingress-domain>
       paths:
         - path: /
           pathType: Prefix
@@ -177,7 +269,7 @@ ingress:
 credentials:
   target:
     credentials:
-      KUBECONFIG: (( read("~/k8s/CLUSTERS/ocmdemo","text") ))
+      KUBECONFIG: (( read("~/.kube/config", "text") ))
 ```
 
 If you use a garden cluster, you can enable DNS support from Gardener, you just

@@ -13,12 +13,13 @@ PLATFORMS   ?= linux/amd64 linux/arm64
 HELMINSTCOMP = ocm.software/toi/installers/helminstaller
 HELMINSTVERS = 0.4.0-dev
 
-REPO_ROOT                                     := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+REPO_ROOT                                      := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
 VERSION                                        = $(shell cat VERSION)
 COMMIT                                         := $(shell git rev-parse --verify HEAD)
 EFFECTIVE_VERSION                              := $(VERSION)-$(COMMIT)
 GIT_TREE_STATE                                 := $(shell [ -z "$$(git status --porcelain 2>/dev/null)" ] && echo clean || echo dirty)
 PLATFORM                                       := $(shell go env GOOS)/$(shell go env GOARCH)
+KUBECONFIG                                     := $(shell echo "$${KUBECONFIG:-~/.kube/config}")
 
 ATTRIBUTES = \
   COMPONENT="$(COMPONENT)" \
@@ -215,3 +216,21 @@ rs:
 .PHONY: rs-add
 rs-add:
 	ocm -K $(PROVIDER)=@$(KEYPAIR) add routingslip $(TARGET) $(PROVIDER) comment --comment "$(COMMENT)"
+
+################################################################################
+# K8s Cluster
+
+.PHONY: kind-up
+kind-up:
+	kind create cluster --config kind.yaml --wait 5m
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/kind/deploy.yaml
+	sed -i 's/127.0.0.1:6443/gateway.docker.internal:6443/g' $(KUBECONFIG)
+
+.PHONY: kind-down
+kind-down:
+	kind delete cluster 
+
+.PHONY: prep-k8s-docker
+prep-k8s-docker:
+	kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/main/deploy/static/provider/cloud/deploy.yaml
+	sed -i 's/127.0.0.1:6443/kubernetes.docker.internal:6443/g' $(KUBECONFIG)
