@@ -256,6 +256,7 @@ config:
   title: "Request Information" # page title
 ingress:
   enabled: true
+  className: "nginx"
   enableGardenDNS: true
   hosts:
     - host: *.<ingress-domain>

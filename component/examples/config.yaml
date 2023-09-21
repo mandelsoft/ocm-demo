@@ -4,6 +4,7 @@ config:
   title: "Request Information" # page title
 ingress:
   enabled: false
+  className: "nginx"
   enableGardenDNS: false
   hosts:
     - host: <your hostname>
